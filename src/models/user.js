@@ -46,6 +46,11 @@ const userSchema = mongoose.Schema(
   { timestamps: true }
 );
 
+//Indexing
+
+userSchema.index({ firstName: 1, lastName: 1 }); //Compound index for name search
+userSchema.index({ _id: "hashed" }); // Hashed index for sharding
+
 userSchema.methods.validatePassword = async function (password) {
   const user = this;
   const hashedPassword = user.password;
