@@ -21,8 +21,20 @@ module.exports.signUpController = async (req, res) => {
     });
 
     user.save();
+
+    const token = await user.getJwt();
+
+    console.log("Token : ", token);
+
+    res.cookie("token", token, {
+      expires: new Date(Date.now() + 24 * 3600000),
+    }); //cookie expires after 24 hrs
+
     console.log("Hell yeah");
-    res.send(`Signed up successfully, Welcome to Dev Bumble ${firstName}`);
+    res.json({
+      message: `Signed up successfully, Welcome to Dev Bumble ${firstName}`,
+      data: user,
+    });
   } catch (error) {
     console.error("Something went wrong", error);
     res.status(500).send("Something went wrong");
@@ -49,7 +61,7 @@ module.exports.loginController = async (req, res) => {
     res.cookie("token", token, {
       expires: new Date(Date.now() + 24 * 3600000),
     }); //cookie expires after 24 hrs
-    res.status(201).send("Logged in successfull !");
+    res.status(201).json({ message: "Logged in successfull !", data: user });
   } catch (error) {
     console.error("Login Error :  ", error.message);
     res.status(400).send("Error : " + error.message);
@@ -61,6 +73,7 @@ module.exports.logoutController = async (req, res) => {
     res.cookie("token", null, {
       expires: new Date(Date.now()),
     });
+    console.log("Logged out successfully");
     res.send("Logged out successfully!!");
   } catch (error) {
     console.error("Logout Error", error.message);

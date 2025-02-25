@@ -29,12 +29,11 @@ const userSchema = mongoose.Schema(
     },
     gender: {
       type: String,
-      required: true,
     },
     photoUrl: {
       type: String,
       default:
-        "https://www.shutterstock.com/shutterstock/photos/2247726673/display_1500/stock-vector-user-profile-icon-vector-avatar-or-person-icon-profile-picture-portrait-symbol-neutral-gender-2247726673.jpg",
+        "https://cdn.pixabay.com/photo/2017/07/18/23/23/user-2517433_1280.png",
     },
     skills: {
       type: [String],

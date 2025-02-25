@@ -9,7 +9,9 @@ module.exports.getMyProfileController = async (req, res) => {
     res.send(user);
   } catch (error) {
     console.error("Get Profile Error :  ", error.message);
-    res.status(400).send("Error : " + error.message);
+    res
+      .status(401)
+      .json({ message: "Get Profile Error : " + error.message, error });
   }
 };
 
@@ -34,6 +36,8 @@ module.exports.editProfileController = async (req, res) => {
     });
   } catch (error) {
     console.error("Edit Profile error : ", error.message);
-    res.status(400).send("Edit Profile error : " + error.message);
+    res
+      .status(400)
+      .json({ message: "Edit Profile error : " + error.message, error });
   }
 };

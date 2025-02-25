@@ -4,6 +4,9 @@ const User = require("../models/user");
 const userAuth = async (req, res, next) => {
   const { token } = req.cookies;
   try {
+    if (!token) {
+      return res.status(401).send("Please login");
+    }
     const decodedData = await jwt.verify(token, "DEVBUMBLE@utkarsh");
     const { _id } = decodedData;
 
