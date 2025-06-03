@@ -57,7 +57,7 @@ module.exports.getUserConnections = async (req, res) => {
 
     const data = connectionRequests?.map((row) => {
       if (row.fromUserId._id.toString() === loggedUser._id.toString()) {
-        console.log("Hell yeah");
+        console.log("connections fetched successfully");
 
         return row.toUserId;
       }
@@ -121,5 +121,33 @@ module.exports.getUserFeed = async (req, res) => {
   } catch (error) {
     console.error("Get Feed Error : " + error.message);
     res.status(400).json({ error: "Get Feed Error : " + error.message });
+  }
+};
+
+module.exports.getMyUserDetails = (req, res) => {
+  try {
+    const user = req.user;
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error("Failed to get user details", error);
+    res.status(400).send("Error fetching my user details");
+  }
+};
+
+module.exports.getOtherUserDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).exec();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    return res
+      .status(200)
+      .json({ message: "User fetched successfully! ", user });
+  } catch (error) {
+    console.error("Error fetching user details");
+    res.status(400).send("Error fetching user details");
   }
 };
