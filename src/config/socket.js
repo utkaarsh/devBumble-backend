@@ -19,16 +19,24 @@ const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     // handle any event
     socket.on("join-chat", ({ userId, otherUserId, firstName }) => {
-      const roomId = [userId, otherUserId].sort().join("_");
+      const roomId = getSecretRoomId(userId, otherUserId);
       socket.join(roomId);
       console.log(firstName, "joined the room:", roomId);
     });
 
     socket.on(
       "send-message",
-      async ({ userId, otherUserId, firstName, lastName, text, photoUrl }) => {
+      async ({
+        userId,
+        otherUserId,
+        firstName,
+        lastName,
+        text,
+        photoUrl,
+        createdAt,
+      }) => {
         try {
-          const roomId = [userId, otherUserId].sort().join("_");
+          const roomId = getSecretRoomId(userId, otherUserId);
           // TODO: Check if userId & targetUserId are friends
 
           let chat = await Chat.findOne({
@@ -45,6 +53,7 @@ const initializeSocket = (server) => {
           chat.messages.push({
             senderId: userId,
             text,
+            delivered: true, // Mark as delivered on send
           });
 
           await chat.save();
@@ -54,12 +63,32 @@ const initializeSocket = (server) => {
             lastName,
             text,
             photoUrl,
+            createdAt,
           });
         } catch (error) {
           console.error("Send message to user error ", error);
         }
       }
     );
+
+    socket.on("mark-as-seen", async ({ userId, otherUserId }) => {
+      const chat = await Chat.findOne({
+        participants: { $all: [userId, otherUserId] },
+      });
+
+      if (chat) {
+        let updated = false;
+        chat.messages.forEach((msg) => {
+          if (msg.senderId.toString() === otherUserId && !msg.seen) {
+            msg.seen = true;
+            updated = true;
+          }
+        });
+        if (updated) await chat.save();
+        const roomId = getSecretRoomId(userId, otherUserId);
+        socket.to(roomId).emit("messagesSeen", { seenBy: userId });
+      }
+    });
     socket.on("disconnect", () => {});
   });
 };
