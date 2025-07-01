@@ -43,11 +43,15 @@ module.exports.sendConnectionRequest = async (req, res) => {
 
     const data = await connectionRequestAction.save();
 
-    const emailRes = await sendEmail.run(
-      "A new connection request from " + req.user.firstName,
-      req.user.firstName + " has sent a connection request to someone"
-    );
-    console.log("Hell yeah email sent ", emailRes);
+    try {
+      const emailRes = await sendEmail.run(
+        "A new connection request from " + req.user.firstName,
+        req.user.firstName + " has sent a connection request to someone"
+      );
+      console.log("Hell yeah email sent ", emailRes);
+    } catch (error) {
+      console.error("Email issue ", error);
+    }
 
     res.json({
       message: "Request sent successfully !!",
