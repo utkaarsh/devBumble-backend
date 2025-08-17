@@ -15,7 +15,18 @@ const transporter = nodemailer.createTransport({
 });
 
 module.exports.signUpController = async (req, res) => {
-  const { firstName, lastName, emailId, password, gender, age } = req.body;
+  const {
+    firstName,
+    lastName,
+    emailId,
+    password,
+    gender,
+    age,
+    skills,
+    experience,
+    interests,
+    about,
+  } = req.body;
 
   try {
     validateData(req);
@@ -29,6 +40,10 @@ module.exports.signUpController = async (req, res) => {
       password: hashedPass,
       gender,
       age,
+      skills,
+      interests,
+      experience,
+      about,
     });
 
     user.save();
@@ -70,30 +85,55 @@ module.exports.signUpController = async (req, res) => {
 
 module.exports.loginController = async (req, res) => {
   const { emailId, password } = req.body;
+
   try {
+    // Check if required fields are provided
+    if (!emailId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
     const user = await User.findOne({ emailId });
-    if (!user) throw new Error("Invalid credentials");
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials (user not found)",
+      });
+    }
 
     const isPasswordValid = await user.validatePassword(password);
     if (!isPasswordValid) {
-      throw new Error("Invalid credentials");
-      // res.sendStatus(401);
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials (wrong password)",
+      });
     }
-    //Create JWT Token
 
+    // Create JWT Token
     const token = await user.getJwt();
 
-    console.log("Token : ", token);
-
     res.cookie("token", token, {
-      expires: new Date(Date.now() + 24 * 3600000),
-    }); //cookie expires after 24 hrs
-    res
-      .status(201)
-      .json({ message: "Logged in successfull !", token, data: user });
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      expires: new Date(Date.now() + 72 * 3600000), // 72 hrs
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged in successfully",
+      token,
+      data: user,
+    });
   } catch (error) {
-    console.error("Login Error :  ", error.message);
-    res.status(400).send("Error : " + error.message);
+    console.error("Login Error: ", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 

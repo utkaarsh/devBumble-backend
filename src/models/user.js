@@ -38,6 +38,15 @@ const userSchema = mongoose.Schema(
     skills: {
       type: [String],
     },
+    location: {
+      type: String,
+    },
+    interests: {
+      type: [String],
+    },
+    experience: {
+      type: String,
+    },
     about: {
       type: String,
     },
@@ -57,12 +66,23 @@ userSchema.methods.validatePassword = async function (password) {
   const isValidPassword = await bcrypt.compare(password, hashedPassword);
   return isValidPassword;
 };
+// ✅ Remove sensitive fields automatically when converting to JSON
+userSchema.set("toJSON", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    delete ret.__v;
+    return ret;
+  },
+});
 
 userSchema.methods.getJwt = async function () {
   const user = this;
 
+  // Use toJSON so that password + __v are stripped automatically
+  const safeUser = user.toJSON();
+
   const token = await jwt.sign(
-    { _id: user._id },
+    { user: safeUser },
     process.env.JWT_TOKEN_SECRET,
     {
       expiresIn: "1d",
