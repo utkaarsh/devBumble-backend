@@ -53,20 +53,20 @@ module.exports.signUpController = async (req, res) => {
     console.log("Token : ", token);
 
     // Send Welcome Email
-    const mailOptions = {
-      from: "utkarshdev29@gmail.com", // Use a verified sender email
-      to: emailId,
-      subject: "Welcome to Dev Bumble!",
-      text: `Hi ${firstName},\n\nThank you for signing up for Dev Bumble! We're excited to have you on board.\n\nBest regards,\nDev Bumble Team`,
-    };
+    // const mailOptions = {
+    //   from: "utkarshdev29@gmail.com", // Use a verified sender email
+    //   to: emailId,
+    //   subject: "Welcome to Dev Bumble!",
+    //   text: `Hi ${firstName},\n\nThank you for signing up for Dev Bumble! We're excited to have you on board.\n\nBest regards,\nDev Bumble Team`,
+    // };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error("Error sending email:", error);
-      } else {
-        console.log("Email sent: " + info.response);
-      }
-    });
+    // transporter.sendMail(mailOptions, (error, info) => {
+    //   if (error) {
+    //     console.error("Error sending email:", error);
+    //   } else {
+    //     console.log("Email sent: " + info.response);
+    //   }
+    // });
 
     res.cookie("token", token, {
       expires: new Date(Date.now() + 24 * 3600000),
@@ -79,7 +79,7 @@ module.exports.signUpController = async (req, res) => {
     });
   } catch (error) {
     console.error("Something went wrong", error);
-    res.status(500).send("Something went wrong");
+    res.status(400).json({ message: error?.message });
   }
 };
 
@@ -129,11 +129,7 @@ module.exports.loginController = async (req, res) => {
   } catch (error) {
     console.error("Login Error: ", error.message);
 
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    res.status(400).json({ message: error?.message });
   }
 };
 

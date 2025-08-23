@@ -39,7 +39,17 @@ const userSchema = mongoose.Schema(
       type: [String],
     },
     location: {
-      type: String,
+      type: {
+        type: String,
+        enum: ["Point"],
+        required: true,
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: true,
+        default: [0, 0],
+      },
     },
     interests: {
       type: [String],
