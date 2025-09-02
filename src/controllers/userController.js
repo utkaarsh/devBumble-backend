@@ -1,7 +1,8 @@
 const ConnectionRequest = require("../models/connectionRequests");
 const User = require("../models/user");
 
-const USER_SAFE_DATA = "firstName lastName photoUrl age gender skills about";
+const USER_SAFE_DATA =
+  "firstName lastName photoUrl age gender skills about interests experience location";
 
 module.exports.getUserPendingRequest = async (req, res) => {
   try {
