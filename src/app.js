@@ -6,6 +6,8 @@ const PORT = 7000;
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const configCors = require("./config/corsConfig");
+const logger = require("./utility/logger"); // <— import the logger
+
 require("dotenv").config();
 //Cron Jobs
 require("./utility/cronJob");
@@ -41,4 +43,5 @@ connectDB()
   })
   .catch((err) => {
     console.error("Database has not been connected", err);
+    logger.error("Database has not been connected", err);
   });
