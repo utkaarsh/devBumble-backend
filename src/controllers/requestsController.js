@@ -1,6 +1,6 @@
 const ConnectionRequest = require("../models/connectionRequests");
 const User = require("../models/user");
-const sendEmail = require("../utility/sendEmail");
+// const sendEmail = require("../utility/sendEmail");
 
 module.exports.sendConnectionRequest = async (req, res) => {
   try {
@@ -43,15 +43,15 @@ module.exports.sendConnectionRequest = async (req, res) => {
 
     const data = await connectionRequestAction.save();
 
-    try {
-      const emailRes = await sendEmail.run(
-        "A new connection request from " + req.user.firstName,
-        req.user.firstName + " has sent a connection request to someone"
-      );
-      console.log("Hell yeah email sent ", emailRes);
-    } catch (error) {
-      console.error("Email issue ", error);
-    }
+    // try {
+    //   const emailRes = await sendEmail.run(
+    //     "A new connection request from " + req.user.firstName,
+    //     req.user.firstName + " has sent a connection request to someone"
+    //   );
+    //   console.log("Hell yeah email sent ", emailRes);
+    // } catch (error) {
+    //   console.error("Email issue ", error);
+    // }
 
     res.json({
       message: "Request sent successfully !!",
