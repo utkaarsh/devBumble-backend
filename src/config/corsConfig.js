@@ -2,7 +2,7 @@ const allowedOrigins = [
   "http://localhost:5173", // local web dev
   "http://localhost:3000", // local RN web
   "https://devbumble-backend-vor2.onrender.com", // your render backend
-  "https://web-dev-bumble.vercel.app/",
+  "https://web-dev-bumble.vercel.app",
 ];
 
 const configCors = {
