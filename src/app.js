@@ -17,6 +17,11 @@ app.options("*", cors(configCors)); // ✅ Handle preflight
 app.use(express.json()); // Parse JSON to Javascript objects
 app.use(cookieParser());
 
+// Health/wakeup endpoint for quick server warmup after inactivity
+app.get("/hello", (req, res) => {
+  res.status(200).json({ message: "hello world" });
+});
+
 const authRouter = require("./routes/auth");
 const profileRouter = require("./routes/profile");
 const requestRouter = require("./routes/request");
