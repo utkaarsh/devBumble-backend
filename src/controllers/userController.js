@@ -6,32 +6,88 @@ const USER_SAFE_DATA =
 
 module.exports.getUserPendingRequest = async (req, res) => {
   try {
+    console.log("Hitted get pending request controller");
     const loggedUser = req.user;
 
     if (!loggedUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // ✅ pagination params
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // ✅ query with pagination + sorting
     const connectionRequests = await ConnectionRequest.find({
       toUserId: loggedUser._id,
       status: "interested",
-    }).populate("fromUserId", USER_SAFE_DATA);
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .skip(skip)
+      .limit(limit)
+      .populate("fromUserId", USER_SAFE_DATA);
 
-    if (!connectionRequests?.length > 0) {
-      return res.status(404).json({ message: "No connection requests" });
-    }
+    // ✅ map to only user data (clean response)
+    const data = connectionRequests.map((req) => req.fromUserId);
 
+    // ❌ don’t throw 404 for empty list (important for pagination)
     res.json({
-      message: "Data fetched successfully!",
-      data: connectionRequests,
+      message: `Data fetched successfully for ${loggedUser.firstName}  ${loggedUser.lastName} !`,
+      data,
+      page,
+      hasMore: data.length === limit, // ✅ key for infinite scroll
     });
   } catch (error) {
-    console.error("Get pending request error : " + error.message);
-    res
-      .status(400)
-      .json({ error: "Get pending request error : " + error.message });
+    console.error("Get pending request error:", error.message);
+    res.status(400).json({
+      error: "Get pending request error: " + error.message,
+    });
   }
 };
+
+module.exports.getUserSentRequest = async (req, res) => {
+  try {
+    console.log("Hitted get pending request controller");
+    const loggedUser = req.user;
+
+    if (!loggedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ pagination params
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // ✅ query with pagination + sorting
+    const connectionRequests = await ConnectionRequest.find({
+      fromUserId: loggedUser._id,
+      status: "interested",
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .skip(skip)
+      .limit(limit)
+      .populate("toUserId", USER_SAFE_DATA);
+
+    // ✅ map to only user data (clean response)
+    const data = connectionRequests.map((req) => req.toUserId);
+
+    // ❌ don’t throw 404 for empty list (important for pagination)
+    res.json({
+      message: `Data fetched successfully for ${loggedUser.firstName}  ${loggedUser.lastName} !`,
+      data,
+      page,
+      hasMore: data.length === limit, // ✅ key for infinite scroll
+    });
+  } catch (error) {
+    console.error("Get pending request error:", error.message);
+    res.status(400).json({
+      error: "Get pending request error: " + error.message,
+    });
+  }
+};
+
 module.exports.getUserConnections = async (req, res) => {
   try {
     const loggedUser = req.user;
@@ -40,39 +96,37 @@ module.exports.getUserConnections = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // ✅ pagination params
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
     const connectionRequests = await ConnectionRequest.find({
       $or: [
         { toUserId: loggedUser._id, status: "accepted" },
-        {
-          fromUserId: loggedUser._id,
-          status: "accepted",
-        },
+        { fromUserId: loggedUser._id, status: "accepted" },
       ],
     })
+      .sort({ createdAt: -1 }) // ✅ latest first
+      .skip(skip)
+      .limit(limit)
       .populate("fromUserId", USER_SAFE_DATA)
       .populate("toUserId", USER_SAFE_DATA);
 
-    if (!connectionRequests?.length > 0) {
-      return res.status(404).json({ message: "No connections" });
-    }
-
-    const data = connectionRequests?.map((row) => {
-      if (row.fromUserId._id.toString() === loggedUser._id.toString()) {
-        console.log("connections fetched successfully");
-
-        return row.toUserId;
-      }
-      return row.fromUserId;
+    const data = connectionRequests.map((row) => {
+      return row.fromUserId._id.toString() === loggedUser._id.toString()
+        ? row.toUserId
+        : row.fromUserId;
     });
+
     res.json({
       message: "Data fetched successfully!",
       data,
+      page,
+      hasMore: data.length === limit, // ✅ important
     });
   } catch (error) {
-    console.error("Get pending request error : " + error.message);
-    res
-      .status(400)
-      .json({ error: "Get pending request error : " + error.message });
+    res.status(400).json({ error: error.message });
   }
 };
 

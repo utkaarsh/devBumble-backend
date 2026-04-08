@@ -30,9 +30,7 @@ module.exports.signUpController = async (req, res) => {
 
   try {
     validateData(req);
-
     const hashedPass = await bcrypt.hash(password, 10);
-
     const user = new User({
       firstName,
       lastName,
@@ -49,25 +47,6 @@ module.exports.signUpController = async (req, res) => {
     user.save();
 
     const token = await user.getJwt();
-
-    console.log("Token : ", token);
-
-    // Send Welcome Email
-    // const mailOptions = {
-    //   from: "utkarshdev29@gmail.com", // Use a verified sender email
-    //   to: emailId,
-    //   subject: "Welcome to Dev Bumble!",
-    //   text: `Hi ${firstName},\n\nThank you for signing up for Dev Bumble! We're excited to have you on board.\n\nBest regards,\nDev Bumble Team`,
-    // };
-
-    // transporter.sendMail(mailOptions, (error, info) => {
-    //   if (error) {
-    //     console.error("Error sending email:", error);
-    //   } else {
-    //     console.log("Email sent: " + info.response);
-    //   }
-    // });
-
     res.cookie("token", token, {
       expires: new Date(Date.now() + 24 * 3600000),
     }); //cookie expires after 24 hrs
@@ -76,6 +55,7 @@ module.exports.signUpController = async (req, res) => {
     res.json({
       message: `Signed up successfully, Welcome to Dev Bumble ${firstName}`,
       data: user,
+      token,
     });
   } catch (error) {
     console.error("Something went wrong", error);
@@ -91,6 +71,7 @@ module.exports.loginController = async (req, res) => {
     if (!emailId || !password) {
       return res.status(400).json({
         success: false,
+        data: req.body,
         message: "Email and password are required",
       });
     }

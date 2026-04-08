@@ -6,6 +6,7 @@ const {
   getUserFeed,
   getMyUserDetails,
   getOtherUserDetails,
+  getUserSentRequest,
 } = require("../controllers/userController");
 
 const userRouter = express.Router();
@@ -18,6 +19,9 @@ userRouter.get("/user/details/:id", userAuth, getOtherUserDetails);
 
 //Get all pending connection requests for logged in users
 userRouter.get("/user/requests/recieved", userAuth, getUserPendingRequest);
+
+//Get all sent connection requests for logged in users
+userRouter.get("/user/requests/sent", userAuth, getUserSentRequest);
 
 //Get all user connections
 userRouter.get("/user/connections", userAuth, getUserConnections);

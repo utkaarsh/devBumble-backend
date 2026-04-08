@@ -72,9 +72,11 @@ module.exports.reviewConnectionRequests = async (req, res) => {
     if (!allowedStatus.includes(status)) {
       throw new Error("Invalid status type : " + status);
     }
+    console.log("requestId", requestId);
+    console.log("loggedUser", loggedUser);
 
     const connectionRequest = await ConnectionRequest.findOne({
-      _id: requestId,
+      fromUserId: requestId,
       toUserId: loggedUser._id,
       status: "interested",
     });

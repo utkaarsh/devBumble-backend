@@ -1,4 +1,6 @@
 const User = require("../models/user");
+const ConnectionRequest = require("../models/connectionRequests");
+
 const { validateEditProfileData } = require("../utility/validatiors");
 
 module.exports.getMyProfileController = async (req, res) => {
@@ -7,6 +9,24 @@ module.exports.getMyProfileController = async (req, res) => {
     const user = await User.findById(_id);
 
     res.send(user);
+  } catch (error) {
+    console.error("Get Profile Error :  ", error.message);
+    res
+      .status(401)
+      .json({ message: "Get Profile Error : " + error.message, error });
+  }
+};
+
+module.exports.getOtherProfileController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    const hasRequested = await ConnectionRequest.findOne({
+      fromUserId: id,
+      toUserId:req.user._id ,
+      status:"interested"
+    });
+    res.json({ user, hasRequested });
   } catch (error) {
     console.error("Get Profile Error :  ", error.message);
     res
