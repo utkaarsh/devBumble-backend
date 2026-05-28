@@ -23,8 +23,8 @@ module.exports.getOtherProfileController = async (req, res) => {
     const user = await User.findById(id);
     const hasRequested = await ConnectionRequest.findOne({
       fromUserId: id,
-      toUserId:req.user._id ,
-      status:"interested"
+      toUserId: req.user._id,
+      status: "interested",
     });
     res.json({ user, hasRequested });
   } catch (error) {
@@ -42,10 +42,9 @@ module.exports.editProfileController = async (req, res) => {
       throw new Error("Invalid data request");
     }
     const loggedUser = req.user;
-    console.log("User ", loggedUser);
 
     Object.keys(req.body).forEach(
-      (keys) => (loggedUser[keys] = req.body[keys])
+      (keys) => (loggedUser[keys] = req.body[keys]),
     );
 
     await loggedUser.save();

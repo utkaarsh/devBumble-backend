@@ -7,6 +7,10 @@ const {
   getMyUserDetails,
   getOtherUserDetails,
   getUserSentRequest,
+  searchUserController,
+  updateLocationController,
+  blockUserController,
+  unblockUserController,
 } = require("../controllers/userController");
 
 const userRouter = express.Router();
@@ -26,7 +30,19 @@ userRouter.get("/user/requests/sent", userAuth, getUserSentRequest);
 //Get all user connections
 userRouter.get("/user/connections", userAuth, getUserConnections);
 
-//Get feed
+//Get feed (nearby developers recommendation)
 userRouter.get("/user/feed", userAuth, getUserFeed);
+
+//Search User
+userRouter.get("/users/search", userAuth, searchUserController);
+
+//Update Location
+userRouter.put("/users/location", userAuth, updateLocationController);
+
+//Block a user
+userRouter.post("/user/block/:userId", userAuth, blockUserController);
+
+//Unblock a user
+userRouter.delete("/user/block/:userId", userAuth, unblockUserController);
 
 module.exports = userRouter;

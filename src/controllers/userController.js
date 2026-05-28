@@ -1,5 +1,9 @@
 const ConnectionRequest = require("../models/connectionRequests");
 const User = require("../models/user");
+const {
+  buildExclusionSet,
+  buildFeedPipeline,
+} = require("../utility/feedPipeline");
 
 const USER_SAFE_DATA =
   "firstName lastName photoUrl age gender skills about interests experience location";
@@ -40,7 +44,7 @@ module.exports.getUserPendingRequest = async (req, res) => {
     });
   } catch (error) {
     console.error("Get pending request error:", error.message);
-    res.status(400).json({
+    res.json({
       error: "Get pending request error: " + error.message,
     });
   }
@@ -48,7 +52,6 @@ module.exports.getUserPendingRequest = async (req, res) => {
 
 module.exports.getUserSentRequest = async (req, res) => {
   try {
-    console.log("Hitted get pending request controller");
     const loggedUser = req.user;
 
     if (!loggedUser) {
@@ -130,52 +133,68 @@ module.exports.getUserConnections = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────────
+// Nearby Developers Feed
+// $geoNear → nearest first → exclusion → paginate
+// ────────────────────────────────────────────────────────────────
 module.exports.getUserFeed = async (req, res) => {
   try {
     const loggedUser = req.user;
-    const page = parseInt(req.query.page) || 1;
+
     let limit = parseInt(req.query.limit) || 10;
+    limit = Math.min(limit, 30);
 
-    limit = limit > 30 ? 30 : limit;
-    const offsets = (page - 1) * limit;
+    const lastSeenId = req.query.lastSeenId || null;
+    const maxDistance =
+      parseInt(req.query.maxDistance) || loggedUser.feedRadius || 50000;
 
-    //Find all connection requests
-    const connectionRequest = await ConnectionRequest.find({
-      $or: [
-        {
-          toUserId: loggedUser._id,
-        },
-        {
-          fromUserId: loggedUser._id,
-        },
-      ],
-    }).select("fromUserId toUserId");
+    // Build exclusion set
+    const excludeIds = await buildExclusionSet(loggedUser._id);
 
-    const hideUsersOnFeed = new Set();
+    // User's location
+    const userLocation =
+      loggedUser.location && loggedUser.location.coordinates
+        ? loggedUser.location.coordinates
+        : null;
 
-    connectionRequest.forEach((req) => {
-      hideUsersOnFeed.add(req.fromUserId.toString());
-      hideUsersOnFeed.add(req.toUserId.toString());
+    if (!userLocation || (userLocation[0] === 0 && userLocation[1] === 0)) {
+      return res.status(400).json({
+        error:
+          "Location not set. Update your location first via PUT /users/location",
+      });
+    }
+
+    // Build & run pipeline
+    const pipeline = buildFeedPipeline({
+      userLocation,
+      excludeIds,
+      maxDistance,
+      limit,
+      lastSeenId,
     });
 
-    const users = await User.find({
-      $and: [
-        {
-          _id: { $nin: Array.from(hideUsersOnFeed) },
-        },
-        {
-          _id: { $ne: loggedUser?._id },
-        },
-      ],
-    })
-      .select(USER_SAFE_DATA)
-      .skip(offsets)
-      .limit(limit);
+    const results = await User.aggregate(pipeline);
 
-    res.json({ message: "Fetched feed data successfully", data: users });
+    const hasMore = results.length > limit;
+    const data = hasMore ? results.slice(0, limit) : results;
+
+    // Next page cursor = last item's _id
+    const nextLastSeenId =
+      data.length > 0 ? data[data.length - 1]._id.toString() : null;
+
+    res.json({
+      message: "Feed fetched successfully",
+      data,
+      hasMore,
+      nextLastSeenId,
+      meta: {
+        maxDistance,
+        count: data.length,
+      },
+    });
   } catch (error) {
-    console.error("Get Feed Error : " + error.message);
-    res.status(400).json({ error: "Get Feed Error : " + error.message });
+    console.error("Get Feed Error:", error.message);
+    res.status(400).json({ error: "Get Feed Error: " + error.message });
   }
 };
 
@@ -204,5 +223,176 @@ module.exports.getOtherUserDetails = async (req, res) => {
   } catch (error) {
     console.error("Error fetching user details");
     res.status(400).send("Error fetching user details");
+  }
+};
+
+//Search users controller
+
+module.exports.searchUserController = async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const query = req.query?.q?.trim();
+
+    if (!query || query.length < 2) {
+      return res
+        .status(400)
+        .json({ error: "Search query must be at least 2 characters" });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    limit = Math.min(limit, 30);
+    const skip = (page - 1) * limit;
+
+    let results;
+    let totalCount;
+
+    // Try $text search first (works for full words, uses text index with relevance scoring)
+    const textSearchQuery = {
+      $text: { $search: query },
+      _id: { $ne: loggedUser._id },
+    };
+
+    totalCount = await User.countDocuments(textSearchQuery);
+
+    if (totalCount > 0) {
+      results = await User.find(textSearchQuery, {
+        score: { $meta: "textScore" },
+      })
+        .select(USER_SAFE_DATA)
+        .sort({ score: { $meta: "textScore" } })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    } else {
+      // Fallback: regex search for partial matches (autocomplete)
+      const regex = new RegExp(query, "i");
+
+      const regexQuery = {
+        _id: { $ne: loggedUser._id },
+        $or: [
+          { firstName: regex },
+          { lastName: regex },
+          { skills: regex },
+          { interests: regex },
+        ],
+      };
+
+      totalCount = await User.countDocuments(regexQuery);
+      results = await User.find(regexQuery)
+        .select(USER_SAFE_DATA)
+        .sort({ firstName: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
+
+    res.json({
+      message: "Search results fetched successfully",
+      data: results,
+      page,
+      hasMore: skip + results.length < totalCount,
+      totalCount,
+    });
+  } catch (error) {
+    console.error("Search Error:", error.message);
+    res.status(400).json({ error: "Search Error: " + error.message });
+  }
+};
+
+module.exports.updateLocationController = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+
+    await User.findByIdAndUpdate(req.user._id, {
+      location: {
+        type: "Point",
+        coordinates: [longitude, latitude],
+        updatedAt: new Date(),
+      },
+    });
+
+    res.send({ success: true });
+  } catch (err) {
+    res.status(500).send({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ────────────────────────────────────────────────────────────────
+// Block / Unblock User
+// ────────────────────────────────────────────────────────────────
+
+module.exports.blockUserController = async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const { userId } = req.params;
+
+    if (loggedUser._id.toString() === userId) {
+      return res.status(400).json({ error: "Cannot block yourself" });
+    }
+
+    // Verify target user exists
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Check if already blocked
+    const existingBlock = await ConnectionRequest.findOne({
+      fromUserId: loggedUser._id,
+      toUserId: userId,
+      status: "blocked",
+    });
+
+    if (existingBlock) {
+      return res.status(400).json({ error: "User is already blocked" });
+    }
+
+    // Remove any existing connection request between the two users (in either direction)
+    await ConnectionRequest.deleteMany({
+      $or: [
+        { fromUserId: loggedUser._id, toUserId: userId },
+        { fromUserId: userId, toUserId: loggedUser._id },
+      ],
+    });
+
+    // Create a block record
+    const blockRequest = new ConnectionRequest({
+      fromUserId: loggedUser._id,
+      toUserId: userId,
+      status: "blocked",
+    });
+
+    await blockRequest.save();
+
+    res.json({ message: `${targetUser.firstName} has been blocked` });
+  } catch (error) {
+    console.error("Block User Error:", error.message);
+    res.status(400).json({ error: "Block User Error: " + error.message });
+  }
+};
+
+module.exports.unblockUserController = async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const { userId } = req.params;
+
+    const result = await ConnectionRequest.findOneAndDelete({
+      fromUserId: loggedUser._id,
+      toUserId: userId,
+      status: "blocked",
+    });
+
+    if (!result) {
+      return res.status(404).json({ error: "Block record not found" });
+    }
+
+    res.json({ message: "User unblocked successfully" });
+  } catch (error) {
+    console.error("Unblock User Error:", error.message);
+    res.status(400).json({ error: "Unblock User Error: " + error.message });
   }
 };

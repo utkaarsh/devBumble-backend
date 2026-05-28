@@ -24,6 +24,11 @@ const userAuth = async (req, res, next) => {
     if (!userExist) throw new Error("User not found");
 
     req.user = userExist;
+    // Update lastActive (fire-and-forget, non-blocking)
+    User.updateOne({ _id: userExist._id }, { lastActive: new Date() }).catch(
+      () => {},
+    );
+
     next();
   } catch (error) {
     res.status(401).json({ msg: "Error : Invalid token" });

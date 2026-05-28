@@ -50,6 +50,7 @@ const userSchema = mongoose.Schema(
         required: true,
         default: [0, 0],
       },
+      updatedAt: Date
     },
     interests: {
       type: [String],
@@ -60,6 +61,22 @@ const userSchema = mongoose.Schema(
     about: {
       type: String,
     },
+    lastActive: {
+      type: Date,
+      default: Date.now,
+    },
+    profileScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    feedRadius: {
+      type: Number,
+      default: 50000, // meters (50km)
+      min: 1000,      // 1km minimum
+      max: 500000,    // 500km maximum
+    },
   },
   { timestamps: true }
 );
@@ -68,6 +85,41 @@ const userSchema = mongoose.Schema(
 
 userSchema.index({ firstName: 1, lastName: 1 }); //Compound index for name search
 userSchema.index({ _id: "hashed" }); // Hashed index for sharding
+userSchema.index({ location: "2dsphere", lastActive: -1 });
+userSchema.index({ lastActive: -1 }); // For recency-only queries
+userSchema.index(
+  { firstName: "text", lastName: "text", skills: "text", interests: "text", about: "text" },
+  { weights: { firstName: 10, lastName: 10, skills: 5, interests: 5, about: 1 }, name: "user_search_text" }
+);
+// Pre-save hook: auto-compute profileScore based on completeness
+userSchema.pre("save", function (next) {
+  // Only recompute if relevant fields changed
+  const fieldsToWatch = ["about", "skills", "interests", "experience", "photoUrl", "age", "gender", "location"];
+  const isRelevantChange = this.isNew || fieldsToWatch.some((f) => this.isModified(f));
+  if (!isRelevantChange) return next();
+
+  let score = 0;
+  if (this.about && this.about.trim().length > 0) score += 20;
+  if (this.skills && this.skills.length > 0) score += Math.min(20, this.skills.length * 5);
+  if (this.interests && this.interests.length > 0) score += Math.min(15, this.interests.length * 5);
+  if (this.experience && this.experience.trim().length > 0) score += 15;
+  if (
+    this.photoUrl &&
+    this.photoUrl !== "https://cdn.pixabay.com/photo/2017/07/18/23/23/user-2517433_1280.png"
+  )
+    score += 15;
+  if (this.age) score += 5;
+  if (this.gender) score += 5;
+  if (
+    this.location &&
+    this.location.coordinates &&
+    (this.location.coordinates[0] !== 0 || this.location.coordinates[1] !== 0)
+  )
+    score += 5;
+
+  this.profileScore = Math.min(100, score);
+  next();
+});
 
 userSchema.methods.validatePassword = async function (password) {
   const user = this;
