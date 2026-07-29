@@ -1,8 +1,11 @@
 const express = require("express");
 const { Chat } = require("../models/chat");
 const { userAuth } = require("../middleware/auth");
+const { getChatList } = require("../controllers/chatContoller");
 
 const chatRouter = express.Router();
+
+chatRouter.get("/chats", userAuth, getChatList );
 
 chatRouter.get("/chat/:otherUserId", userAuth, async (req, res) => {
   const { otherUserId } = req.params;

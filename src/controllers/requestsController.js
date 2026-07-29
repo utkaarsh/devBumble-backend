@@ -28,7 +28,7 @@ module.exports.sendConnectionRequest = async (req, res) => {
         .json({ message: "Cannot send connection request to self!!" });
     }
 
-    if (alreadyRequested?.length) {
+    if (alreadyRequested?.length && alreadyRequested?.[0]?.status !== "ignored") {
       return res.status(400).json({
         message: "Already a request action taken!!!",
         status: alreadyRequested[0]?.status,

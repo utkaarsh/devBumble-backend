@@ -20,18 +20,35 @@ module.exports.getMyProfileController = async (req, res) => {
 module.exports.getOtherProfileController = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
-    const hasRequested = await ConnectionRequest.findOne({
-      fromUserId: id,
-      toUserId: req.user._id,
-      status: "interested",
-    });
-    res.json({ user, hasRequested });
+    const loggedUser = req.user;
+
+    const user = await User.findById(id).lean();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const conn = await ConnectionRequest.findOne({
+      $or: [
+        { fromUserId: loggedUser._id, toUserId: id },
+        { fromUserId: id, toUserId: loggedUser._id },
+      ],
+    }).lean();
+    user.connectionStatus = conn?.status ? conn.status : "none";
+    user.connection = conn ? {
+      ...conn,
+      fromUserId: conn.fromUserId.toString() === loggedUser._id.toString() ? "me" : conn.fromUserId.toString(),
+      toUserId: conn.toUserId.toString() === loggedUser._id.toString() ? "me" : conn.fromUserId.toString(),
+    } : null;
+
+        console.log("connection status", user?.connection);
+
+    return res
+      .status(200)
+      .json({ message: "User fetched successfully! ", data: user });
   } catch (error) {
-    console.error("Get Profile Error :  ", error.message);
-    res
-      .status(401)
-      .json({ message: "Get Profile Error : " + error.message, error });
+    console.error("Error fetching user details:", error.message);
+    res.status(400).send("Error fetching user details");
   }
 };
 

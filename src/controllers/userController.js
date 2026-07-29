@@ -94,7 +94,7 @@ module.exports.getUserSentRequest = async (req, res) => {
 module.exports.getUserConnections = async (req, res) => {
   try {
     const loggedUser = req.user;
-
+    
     if (!loggedUser) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -211,17 +211,33 @@ module.exports.getMyUserDetails = (req, res) => {
 module.exports.getOtherUserDetails = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id).exec();
+    const loggedUser = req.user;
+
+    const user = await User.findById(id).lean();
 
     if (!user) {
-      throw new Error("User not found");
+      return res.status(404).json({ error: "User not found" });
     }
+
+    const conn = await ConnectionRequest.findOne({
+      $or: [
+        { fromUserId: loggedUser._id, toUserId: id },
+        { fromUserId: id, toUserId: loggedUser._id },
+      ],
+    }).lean();
+
+    user.connectionStatus = conn ? conn.status : "none";
+    user.connection = conn ? {
+      ...conn,
+      fromUserId: conn.fromUserId.toString() === loggedUser._id.toString() ? "me" : "them",
+      toUserId: conn.toUserId.toString() === loggedUser._id.toString() ? "me" : "them",
+    } : null;
 
     return res
       .status(200)
       .json({ message: "User fetched successfully! ", user });
   } catch (error) {
-    console.error("Error fetching user details");
+    console.error("Error fetching user details:", error.message);
     res.status(400).send("Error fetching user details");
   }
 };
@@ -287,9 +303,40 @@ module.exports.searchUserController = async (req, res) => {
         .lean();
     }
 
+      let data = [];
+    if (results && results.length > 0) {
+      const userIds = results.map((user) => user._id);
+      const connectionRequests = await ConnectionRequest.find({
+        $or: [
+          { fromUserId: loggedUser._id, toUserId: { $in: userIds } },
+          { fromUserId: { $in: userIds }, toUserId: loggedUser._id },
+        ],
+      }).lean();
+
+      const connectionMap = {};
+      const connectionObjectMap = {};
+      connectionRequests.forEach((conn) => {
+        const otherUserId = conn.fromUserId.toString() === loggedUser._id.toString()
+          ? conn.toUserId.toString()
+          : conn.fromUserId.toString();
+        connectionMap[otherUserId] = conn.status;
+        connectionObjectMap[otherUserId] = {
+          ...conn,
+          fromUserId: conn.fromUserId.toString() === loggedUser._id.toString() ? "me" : "them",
+          toUserId: conn.toUserId.toString() === loggedUser._id.toString() ? "me" : "them",
+        };
+      });
+
+      data = results.map((user) => ({
+        ...user,
+        connectionStatus: connectionMap[user._id.toString()] || "none",
+        connection: connectionObjectMap[user._id.toString()] || null,
+      }));
+    }
+
     res.json({
       message: "Search results fetched successfully",
-      data: results,
+      data,
       page,
       hasMore: skip + results.length < totalCount,
       totalCount,

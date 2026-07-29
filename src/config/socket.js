@@ -21,7 +21,7 @@ const initializeSocket = (server) => {
     socket.on("join-chat", ({ userId, otherUserId, firstName }) => {
       const roomId = getSecretRoomId(userId, otherUserId);
       socket.join(roomId);
-      console.log(firstName, "joined the room:", roomId);
+      console.log(firstName, " joined the room:", roomId);
     });
 
     socket.on(
@@ -59,12 +59,14 @@ const initializeSocket = (server) => {
           await chat.save();
 
           io.to(roomId).emit("messageRecieved", {
+            senderId: userId,
             firstName,
             lastName,
             text,
             photoUrl,
             createdAt,
           });
+          console.log("Message sent to room:", roomId);
         } catch (error) {
           console.error("Send message to user error ", error);
         }
@@ -74,8 +76,7 @@ const initializeSocket = (server) => {
     socket.on("mark-as-seen", async ({ userId, otherUserId }) => {
       const chat = await Chat.findOne({
         participants: { $all: [userId, otherUserId] },
-      });
-
+      }); 
       if (chat) {
         let updated = false;
         chat.messages.forEach((msg) => {
@@ -87,8 +88,13 @@ const initializeSocket = (server) => {
         if (updated) await chat.save();
         const roomId = getSecretRoomId(userId, otherUserId);
         socket.to(roomId).emit("messagesSeen", { seenBy: userId });
+        console.log("Mark as seen");
       }
     });
+    socket.on("leave-chat", ({ userId, otherUserId }) => {
+  const roomId = getSecretRoomId(userId, otherUserId);
+  socket.leave(roomId);
+});
     socket.on("disconnect", () => {});
   });
 };
