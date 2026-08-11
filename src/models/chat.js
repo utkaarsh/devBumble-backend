@@ -13,6 +13,7 @@ const messageSchema = new mongoose.Schema(
     },
     delivered: { type: Boolean, default: false },
     seen: { type: Boolean, default: false },
+    lastSeenAt: { type: Date, default: Date.now() },
   },
   { timestamps: true }
 );
