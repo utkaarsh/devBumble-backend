@@ -14,7 +14,8 @@ require("./utility/cronJob");
 
 app.use(cors(configCors)); // ✅ Apply CORS properly
 app.options("*", cors(configCors)); // ✅ Handle preflight
-app.use(express.json()); // Parse JSON to Javascript objects
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 // Health/wakeup endpoint for quick server warmup after inactivity
@@ -27,7 +28,7 @@ const profileRouter = require("./routes/profile");
 const requestRouter = require("./routes/request");
 const userRouter = require("./routes/user");
 const chatRouter = require("./routes/chat");
-
+const jobRouter = require("./routes/jobs");
 const initializeSocket = require("./config/socket");
 
 app.use("/", authRouter);
@@ -35,6 +36,7 @@ app.use("/", profileRouter);
 app.use("/", requestRouter);
 app.use("/", userRouter);
 app.use("/", chatRouter);
+app.use("/", jobRouter);
 
 const server = http.createServer(app);
 initializeSocket(server);
