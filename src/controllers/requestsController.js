@@ -1,5 +1,6 @@
 const ConnectionRequest = require("../models/connectionRequests");
 const User = require("../models/user");
+const sendPushNotification = require("../utility/pushNotifications");
 // const sendEmail = require("../utility/sendEmail");
 
 module.exports.sendConnectionRequest = async (req, res) => {
@@ -43,15 +44,16 @@ module.exports.sendConnectionRequest = async (req, res) => {
 
     const data = await connectionRequestAction.save();
 
-    // try {
-    //   const emailRes = await sendEmail.run(
-    //     "A new connection request from " + req.user.firstName,
-    //     req.user.firstName + " has sent a connection request to someone"
-    //   );
-    //   console.log("Hell yeah email sent ", emailRes);
-    // } catch (error) {
-    //   console.error("Email issue ", error);
-    // }
+    if (status === "interested") {
+      sendPushNotification(toUserId, {
+        title: "New Connection Request",
+        body: `${req.user.firstName} ${req.user.lastName} sent you a connection request.`,
+        data: {
+          type: "CONNECTION_REQUEST",
+          fromUserId: req.user._id,
+        },
+      }).catch((err) => console.error("Push notification send error:", err));
+    }
 
     res.json({
       message: "Request sent successfully !!",
@@ -86,6 +88,17 @@ module.exports.reviewConnectionRequests = async (req, res) => {
     connectionRequest.status = status;
 
     const data = await connectionRequest.save();
+
+    if (status === "accepted") {
+      sendPushNotification(requestId, {
+        title: "Connection Request Accepted",
+        body: `${loggedUser.firstName} ${loggedUser.lastName} accepted your connection request!`,
+        data: {
+          type: "CONNECTION_ACCEPTED",
+          acceptedByUserId: loggedUser._id,
+        },
+      }).catch((err) => console.error("Push notification send error:", err));
+    }
 
     res.json({ message: "Connection request " + status, data });
   } catch (error) {

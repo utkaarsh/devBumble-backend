@@ -1,6 +1,7 @@
 const socket = require("socket.io");
 const crypto = require("crypto");
 const { Chat } = require("../models/chat");
+const sendPushNotification = require("../utility/pushNotifications");
 
 const getSecretRoomId = (userId, otherUserId) => {
   return crypto
@@ -67,6 +68,16 @@ const initializeSocket = (server) => {
             createdAt,
           });
           console.log("Message sent to room:", roomId);
+
+          sendPushNotification(otherUserId, {
+            title: `${firstName} ${lastName}`,
+            body: text,
+            data: {
+              type: "CHAT_MESSAGE",
+              senderId: userId,
+              chatId: chat._id,
+            },
+          }).catch((err) => console.error("Push notification send error:", err));
         } catch (error) {
           console.error("Send message to user error ", error);
         }
