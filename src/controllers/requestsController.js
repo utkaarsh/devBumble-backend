@@ -1,5 +1,6 @@
 const ConnectionRequest = require("../models/connectionRequests");
 const User = require("../models/user");
+const { createNotification } = require("../services/notificationService");
 const sendPushNotification = require("../utility/pushNotifications");
 // const sendEmail = require("../utility/sendEmail");
 
@@ -45,6 +46,19 @@ module.exports.sendConnectionRequest = async (req, res) => {
     const data = await connectionRequestAction.save();
 
     if (status === "interested") {
+      createNotification({
+        recipientId: toUserId,
+        type: "CONNECTION_REQUEST",
+        senderId: fromUserId,
+        title: "New Connection Request",
+        body: `${req.user.firstName} ${req.user.lastName} sent you a connection request.`,
+        photoUrl: req.user.photoUrl,
+        data: {
+          type: "CONNECTION_REQUEST",
+          fromUserId: req.user._id,
+        },
+      })
+
       sendPushNotification(toUserId, {
         title: "New Connection Request",
         body: `${req.user.firstName} ${req.user.lastName} sent you a connection request.`,
@@ -90,6 +104,19 @@ module.exports.reviewConnectionRequests = async (req, res) => {
     const data = await connectionRequest.save();
 
     if (status === "accepted") {
+      createNotification({
+        recipientId: requestId,
+        type: "CONNECTION_ACCEPTED",
+        senderId: loggedUser._id,
+        title: "Connection Request Accepted",
+        body: `${loggedUser.firstName} ${loggedUser.lastName} accepted your connection request!`,
+        photoUrl: loggedUser.photoUrl,
+        data: {
+          type: "CONNECTION_ACCEPTED",
+          acceptedByUserId: loggedUser._id,
+        },
+      })
+
       sendPushNotification(requestId, {
         title: "Connection Request Accepted",
         body: `${loggedUser.firstName} ${loggedUser.lastName} accepted your connection request!`,
@@ -104,5 +131,85 @@ module.exports.reviewConnectionRequests = async (req, res) => {
   } catch (error) {
     console.error("Review connection request error : " + error.message);
     res.status(400).json({ error: error.message });
+  }
+};
+
+module.exports.cancelConnectionRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user._id;
+
+    const request = await ConnectionRequest.findOne({
+      _id: requestId,
+      fromUserId: userId,
+      status: "interested",
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        message: "Pending connection request not found",
+      });
+    }
+
+    await ConnectionRequest.deleteOne({
+      _id: request._id,
+    });
+
+    return res.status(200).json({
+      message: "Connection request cancelled successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Cancel connection request error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Failed to cancel connection request",
+    });
+  }
+};
+
+module.exports.removeConnection = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user._id;
+
+    const connectionRequest = await ConnectionRequest.findOne({
+      status: "accepted",
+      $or: [
+        {
+          fromUserId: currentUserId,
+          toUserId: userId,
+        },
+        {
+          fromUserId: userId,
+          toUserId: currentUserId,
+        },
+      ],
+    });
+
+    if (!connectionRequest) {
+      return res.status(404).json({
+        message: "Connection not found",
+      });
+    }
+
+    await ConnectionRequest.deleteOne({
+      _id: connectionRequest._id,
+    });
+
+    return res.status(200).json({
+      message: "Connection removed successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Remove connection error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Failed to remove connection",
+    });
   }
 };

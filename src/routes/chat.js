@@ -1,7 +1,7 @@
 const express = require("express");
 const { Chat } = require("../models/chat");
 const { userAuth } = require("../middleware/auth");
-const { getChatList } = require("../controllers/chatContoller");
+const { getChatList, deleteChat } = require("../controllers/chatContoller");
 
 const chatRouter = express.Router();
 
@@ -30,5 +30,7 @@ chatRouter.get("/chat/:otherUserId", userAuth, async (req, res) => {
     console.error(err);
   }
 });
+
+chatRouter.delete("/chat/delete/:otherUserId", userAuth, deleteChat);
 
 module.exports = chatRouter;

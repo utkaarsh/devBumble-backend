@@ -2,6 +2,8 @@ const express = require("express");
 const {
   sendConnectionRequest,
   reviewConnectionRequests,
+  cancelConnectionRequest,
+  removeConnection,
 } = require("../controllers/requestsController");
 const { userAuth } = require("../middleware/auth");
 
@@ -21,6 +23,18 @@ requestRouter.post(
   "/request/review/:status/:requestId",
   userAuth,
   reviewConnectionRequests
+);
+
+requestRouter.delete(
+  "/request/cancel/:requestId",
+  userAuth,
+  cancelConnectionRequest
+);
+
+requestRouter.delete(
+  "/request/remove/:userId",
+  userAuth,
+  removeConnection
 );
 
 module.exports = requestRouter;

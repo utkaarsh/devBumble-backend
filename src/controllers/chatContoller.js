@@ -53,3 +53,48 @@ module.exports.getChatList= async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
+
+module.exports.deleteChat = async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const userId = req.user._id;
+
+    const chat = await Chat.findOne({
+      participants: {
+        $all: [userId, otherUserId],
+      },
+    });
+
+    if (!chat) {
+      return res.status(404).json({
+        message: "Chat not found",
+      });
+    }
+
+    // Extra security check
+    const isParticipant = chat.participants.some(
+      (participantId) =>
+        participantId.toString() === userId.toString()
+    );
+
+    if (!isParticipant) {
+      return res.status(403).json({
+        message: "You are not a participant in this chat",
+      });
+    }
+
+    await Chat.deleteOne({
+      _id: chat._id,
+    });
+
+    return res.status(200).json({
+      message: "Chat deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete chat error:", error);
+
+    return res.status(500).json({
+      message: "Failed to delete chat",
+    });
+  }
+};

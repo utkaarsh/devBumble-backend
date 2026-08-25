@@ -2,6 +2,7 @@ const socket = require("socket.io");
 const crypto = require("crypto");
 const { Chat } = require("../models/chat");
 const sendPushNotification = require("../utility/pushNotifications");
+const { createNotification } = require("../services/notificationService");
 
 const getSecretRoomId = (userId, otherUserId) => {
   return crypto
@@ -68,6 +69,25 @@ const initializeSocket = (server) => {
             createdAt,
           });
           console.log("Message sent to room:", roomId);
+          const notification = await createNotification({
+                recipientId: otherUserId,
+
+                type: "CHAT_MESSAGE",
+
+                senderId: userId,
+
+                title: `${firstName} ${lastName}`,
+
+                body: text,
+
+                photoUrl,
+
+                data: {
+                  chatId: chat._id.toString(),
+                },
+              });
+
+        console.log("Notification created:", notification._id);
 
           sendPushNotification(otherUserId, {
             title: `${firstName} ${lastName}`,
