@@ -1,36 +1,40 @@
 const express = require("express");
 const { Chat } = require("../models/chat");
 const { userAuth } = require("../middleware/auth");
-const { getChatList, deleteChat } = require("../controllers/chatContoller");
+const { getChatList, deleteChat, getChatMessages } = require("../controllers/chatContoller");
 
 const chatRouter = express.Router();
 
-chatRouter.get("/chats", userAuth, getChatList );
+// ==================================================
+// CHAT LIST
+// ==================================================
 
-chatRouter.get("/chat/:otherUserId", userAuth, async (req, res) => {
-  const { otherUserId } = req.params;
-  const userId = req.user._id;
+chatRouter.get(
+  "/chats",
+  userAuth,
+  getChatList
+);
 
-  try {
-    let chat = await Chat.findOne({
-      participants: { $all: [userId, otherUserId] },
-    }).populate({
-      path: "messages.senderId",
-      select: "firstName lastName photoUrl",
-    });
-    if (!chat) {
-      chat = new Chat({
-        participants: [userId, otherUserId],
-        messages: [],
-      });
-      await chat.save();
-    }
-    res.json(chat);
-  } catch (err) {
-    console.error(err);
-  }
-});
 
-chatRouter.delete("/chat/delete/:otherUserId", userAuth, deleteChat);
+// ==================================================
+// CHAT MESSAGES
+// ==================================================
+
+chatRouter.get(
+  "/chat/:otherUserId/messages",
+  userAuth,
+  getChatMessages
+);
+
+
+// ==================================================
+// DELETE CHAT
+// ==================================================
+
+chatRouter.delete(
+  "/chat/delete/:chatId",
+  userAuth,
+  deleteChat
+);
 
 module.exports = chatRouter;

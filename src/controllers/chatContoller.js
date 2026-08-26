@@ -1,68 +1,267 @@
 const { Chat } = require("../models/chat");
+const ConnectionRequest = require("../models/connectionRequests");
+const { Message } = require("../models/message");
+const User = require("../models/user");
+const mongoose = require("mongoose");
+const { timeAgo } = require("../utility/helpers");
 
-module.exports.getChatList= async (req, res) => {
-  const userId = req.user._id;
 
+
+// ==================================================
+// GET CHAT LIST
+// GET /chats
+// ==================================================
+
+module.exports.getChatList = async (req, res) => {
   try {
+    const userId = req.user._id;
+
+    // -----------------------------------------------
+    // Get existing chats
+    // -----------------------------------------------
+
     const chats = await Chat.find({
       participants: userId,
-      messages: { $exists: true, $not: { $size: 0 } },
-    }).populate({
-      path: "participants",
-      select: "firstName lastName photoUrl",
-    });
+      lastMessageAt: { $ne: null },
+    })
+      .sort({ lastMessageAt: -1 })
+      .populate({
+        path: "participants",
+        select: "firstName lastName photoUrl",
+      })
+      .lean();
 
     const chatList = chats
       .map((chat) => {
         const otherParticipant = chat.participants.find(
-          (p) => p._id.toString() !== userId.toString()
+          (participant) =>
+            participant._id.toString() !== userId.toString()
         );
 
-        if (!otherParticipant) return null;
+        if (!otherParticipant) {
+          return null;
+        }
 
-        const lastMessage = chat.messages[chat.messages.length - 1];
+        const lastMessage = chat.lastMessage;
+
+        let lastMessageText = lastMessage?.text || "";
+
+        // ---------------------------------------------
+        // If the last message was sent by us
+        // ---------------------------------------------
+
+        if (
+          lastMessage?.senderId?.toString() ===
+          userId.toString()
+        ) {
+          if (lastMessage.seen) {
+            lastMessageText = "Seen";
+          } else {
+            lastMessageText = `Sent ${timeAgo(
+              lastMessage.createdAt
+            )}`;
+          }
+        }
 
         return {
           chatId: chat._id,
+
           userId: otherParticipant._id,
+
           firstName: otherParticipant.firstName,
+
           lastName: otherParticipant.lastName,
+
           photoUrl: otherParticipant.photoUrl,
+
           lastMessage: {
-            text: lastMessage.text,
-            senderId: lastMessage.senderId,
-            createdAt: lastMessage.createdAt,
-            delivered: lastMessage.delivered,
-            seen: lastMessage.seen,
+            ...lastMessage,
+
+            text: lastMessageText,
           },
+
+          lastMessageAt: chat.lastMessageAt,
         };
       })
-      .filter((item) => item !== null);
+      .filter(Boolean);
 
-    chatList.sort(
-      (a, b) =>
-        new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt)
+
+    // -----------------------------------------------
+    // Get users who don't have a chat yet
+    // -----------------------------------------------
+
+    const chattedUserIds = chats.flatMap(
+      (chat) =>
+        chat.participants.map(
+          (participant) => participant._id
+        )
     );
 
-    res.json({
-      message: "Chatted users list fetched successfully",
-      data: chatList,
-    });
-  } catch (err) {
-    console.error("Error fetching chat list: ", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-}
 
-module.exports.deleteChat = async (req, res) => {
+    // -----------------------------------------------
+    // Get accepted connections
+    // -----------------------------------------------
+
+    const connectionRequests =
+      await ConnectionRequest.find({
+        $or: [
+          {
+            toUserId: userId,
+            status: "accepted",
+          },
+          {
+            fromUserId: userId,
+            status: "accepted",
+          },
+        ],
+      });
+
+
+    // -----------------------------------------------
+    // Get suggestions
+    // -----------------------------------------------
+
+    const connectedUserIds = connectionRequests.flatMap(
+      (request) => [
+        request.toUserId,
+        request.fromUserId,
+      ]
+    );
+
+    const suggestions = await User.find({
+      _id: {
+        $nin: [
+          userId,
+          ...chattedUserIds,
+        ],
+
+        $in: connectedUserIds,
+      },
+    })
+      .select(
+        "firstName lastName photoUrl about"
+      )
+      .limit(7)
+      .lean();
+
+
+    // -----------------------------------------------
+    // Response
+    // -----------------------------------------------
+
+    return res.status(200).json({
+      message: "Chat list fetched successfully",
+
+      data: chatList,
+
+      suggestions,
+    });
+
+  } catch (error) {
+    console.error(
+      "Get chat list error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Failed to fetch chat list",
+    });
+  }
+};
+
+
+// ==================================================
+// GET CHAT MESSAGES
+// GET /chat/:chatId/messages
+// ==================================================
+
+module.exports.getChatMessages = async (req, res) => {
   try {
     const { otherUserId } = req.params;
     const userId = req.user._id;
+
+    // -----------------------------------------------
+    // Validate otherUserId
+    // -----------------------------------------------
+
+    if (!mongoose.Types.ObjectId.isValid(otherUserId)) {
+      return res.status(400).json({
+        message: "Invalid user ID",
+      });
+    }
+
+    // -----------------------------------------------
+    // Find chat between current user and other user
+    // -----------------------------------------------
 
     const chat = await Chat.findOne({
       participants: {
         $all: [userId, otherUserId],
       },
+    }).lean();
+
+    // -----------------------------------------------
+    // Chat doesn't exist yet
+    // -----------------------------------------------
+
+    if (!chat) {
+      return res.status(200).json({
+        message: "Chat found",
+        data: [],
+      });
+    }
+
+    // -----------------------------------------------
+    // Get messages using Chat._id
+    // -----------------------------------------------
+
+    const messages = await Message.find({
+      chatId: chat._id,
+    })
+      .sort({ createdAt: 1 })
+      .populate({
+        path: "senderId",
+        select: "firstName lastName photoUrl",
+      })
+      .lean();
+
+    // -----------------------------------------------
+    // Return messages
+    // -----------------------------------------------
+
+    return res.status(200).json({
+      message: "Messages fetched successfully",
+      data: messages,
+    });
+
+  } catch (error) {
+    console.error(
+      "Get chat messages error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Failed to fetch messages",
+    });
+  }
+};
+// ==================================================
+// DELETE CHAT
+// DELETE /chat/delete/:chatId
+// ==================================================
+
+module.exports.deleteChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const userId = req.user._id;
+
+    // -----------------------------------------------
+    // Find chat + verify participant
+    // -----------------------------------------------
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      participants: userId,
     });
 
     if (!chat) {
@@ -71,17 +270,17 @@ module.exports.deleteChat = async (req, res) => {
       });
     }
 
-    // Extra security check
-    const isParticipant = chat.participants.some(
-      (participantId) =>
-        participantId.toString() === userId.toString()
-    );
+    // -----------------------------------------------
+    // Delete messages
+    // -----------------------------------------------
 
-    if (!isParticipant) {
-      return res.status(403).json({
-        message: "You are not a participant in this chat",
-      });
-    }
+    await Message.deleteMany({
+      chatId: chat._id,
+    });
+
+    // -----------------------------------------------
+    // Delete chat
+    // -----------------------------------------------
 
     await Chat.deleteOne({
       _id: chat._id,
@@ -90,8 +289,12 @@ module.exports.deleteChat = async (req, res) => {
     return res.status(200).json({
       message: "Chat deleted successfully",
     });
+
   } catch (error) {
-    console.error("Delete chat error:", error);
+    console.error(
+      "Delete chat error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Failed to delete chat",

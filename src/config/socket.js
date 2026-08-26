@@ -1,133 +1,24 @@
-const socket = require("socket.io");
-const crypto = require("crypto");
-const { Chat } = require("../models/chat");
-const sendPushNotification = require("../utility/pushNotifications");
-const { createNotification } = require("../services/notificationService");
-
-const getSecretRoomId = (userId, otherUserId) => {
-  return crypto
-    .createHash("sha256")
-    .update([userId, otherUserId].sort().join("_"))
-    .digest("hex");
-};
+const { Server } = require("socket.io");
+const registerChatHandlers = require("../socket/handlers/chat.socket");
 
 const initializeSocket = (server) => {
-  const io = socket(server, {
+  const io = new Server(server, {
     cors: {
       origin: "http://localhost:5173",
     },
   });
 
   io.on("connection", (socket) => {
-    // handle any event
-    socket.on("join-chat", ({ userId, otherUserId, firstName }) => {
-      const roomId = getSecretRoomId(userId, otherUserId);
-      socket.join(roomId);
-      console.log(firstName, " joined the room:", roomId);
+    console.log("Socket connected:", socket.id);
+
+    registerChatHandlers(io, socket);
+
+    socket.on("disconnect", () => {
+      console.log("Socket disconnected:", socket.id);
     });
-
-    socket.on(
-      "send-message",
-      async ({
-        userId,
-        otherUserId,
-        firstName,
-        lastName,
-        text,
-        photoUrl,
-        createdAt,
-      }) => {
-        try {
-          const roomId = getSecretRoomId(userId, otherUserId);
-          // TODO: Check if userId & targetUserId are friends
-
-          let chat = await Chat.findOne({
-            participants: { $all: [userId, otherUserId] },
-          });
-
-          if (!chat) {
-            chat = new Chat({
-              participants: [userId, otherUserId],
-              messages: [],
-            });
-          }
-
-          chat.messages.push({
-            senderId: userId,
-            text,
-            delivered: true, // Mark as delivered on send
-          });
-
-          await chat.save();
-
-          io.to(roomId).emit("messageRecieved", {
-            senderId: userId,
-            firstName,
-            lastName,
-            text,
-            photoUrl,
-            createdAt,
-          });
-          console.log("Message sent to room:", roomId);
-          const notification = await createNotification({
-                recipientId: otherUserId,
-
-                type: "CHAT_MESSAGE",
-
-                senderId: userId,
-
-                title: `${firstName} ${lastName}`,
-
-                body: text,
-
-                photoUrl,
-
-                data: {
-                  chatId: chat._id.toString(),
-                },
-              });
-
-        console.log("Notification created:", notification._id);
-
-          sendPushNotification(otherUserId, {
-            title: `${firstName} ${lastName}`,
-            body: text,
-            data: {
-              type: "CHAT_MESSAGE",
-              senderId: userId,
-              chatId: chat._id,
-            },
-          }).catch((err) => console.error("Push notification send error:", err));
-        } catch (error) {
-          console.error("Send message to user error ", error);
-        }
-      }
-    );
-
-    socket.on("mark-as-seen", async ({ userId, otherUserId }) => {
-      const chat = await Chat.findOne({
-        participants: { $all: [userId, otherUserId] },
-      }); 
-      if (chat) {
-        let updated = false;
-        chat.messages.forEach((msg) => {
-          if (msg.senderId.toString() === otherUserId && !msg.seen) {
-            msg.seen = true;
-            updated = true;
-          }
-        });
-        if (updated) await chat.save();
-        const roomId = getSecretRoomId(userId, otherUserId);
-        socket.to(roomId).emit("messagesSeen", { seenBy: userId });
-        console.log("Mark as seen");
-      }
-    });
-    socket.on("leave-chat", ({ userId, otherUserId }) => {
-  const roomId = getSecretRoomId(userId, otherUserId);
-  socket.leave(roomId);
-});
-    socket.on("disconnect", () => {});
   });
+
+  return io;
 };
 
 module.exports = initializeSocket;
