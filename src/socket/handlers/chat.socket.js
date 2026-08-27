@@ -138,10 +138,11 @@ const registerChatHandlers = (io, socket) => {
                 // Create message
                 // --------------------------------------------
 
-                const message =
+                const { message, unreadCount } =
                     await createMessage({
                         chatId: chat._id,
                         senderId: userId,
+                        recipientId: otherUserId,
                         text,
                     });
 
@@ -194,6 +195,7 @@ const registerChatHandlers = (io, socket) => {
                     firstName,
                     lastName,
                     photoUrl,
+                    unreadCount,
                     lastMessage: {
                         text: message.text,
                         senderId: userId,
@@ -226,6 +228,7 @@ const registerChatHandlers = (io, socket) => {
                 // --------------------------------------------
                 // In-app notification
                 // --------------------------------------------
+                console.log("Messgae :: ", message);
 
                 createNotification({
                     recipientId: otherUserId,
@@ -384,6 +387,10 @@ const registerChatHandlers = (io, socket) => {
                             userId,
                     }
                 );
+                io.to(getUserRoomId(userId)).emit("unreadCountUpdated", {
+                    chatId,
+                    unreadCount: 0,
+                });
 
             } catch (error) {
 

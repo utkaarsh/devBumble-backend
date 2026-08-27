@@ -65,15 +65,11 @@ module.exports.getChatList = async (req, res) => {
 
         return {
           chatId: chat._id,
-
           userId: otherParticipant._id,
-
           firstName: otherParticipant.firstName,
-
           lastName: otherParticipant.lastName,
-
           photoUrl: otherParticipant.photoUrl,
-
+          unreadCount: chat.unreadCounts?.[userId.toString()] ?? 0,
           lastMessage: {
             ...lastMessage,
 

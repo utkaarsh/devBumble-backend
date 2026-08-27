@@ -34,15 +34,17 @@ const findOrCreateChat = async (userId, otherUserId) => {
 const createMessage = async ({
     chatId,
     senderId,
+    recipientId,
     text,
 }) => {
     const message = await Message.create({
         chatId,
         senderId,
+        recipientId,
         text: text.trim(),
     });
 
-    await Chat.updateOne(
+    const updatedChat = await Chat.updateOne(
         {
             _id: chatId,
         },
@@ -58,10 +60,19 @@ const createMessage = async ({
 
                 lastMessageAt: message.createdAt,
             },
-        }
+            $inc: {
+                [`unreadCounts.${recipientId}`]: 1,
+            },
+        },
+        { new: true }
     );
 
-    return message;
+    return {
+        message,
+        // Map fields come back as a Map instance from Mongoose —
+        // .get() is the correct way to read a dynamic key.
+        unreadCount: updatedChat.unreadCounts?.get(recipientId.toString()) ?? 0,
+    };
 };
 
 
@@ -116,40 +127,22 @@ const markMessageDelivered = async (messageId) => {
 // Mark messages seen
 // --------------------------------------------------
 
-const markMessagesSeen = async ({
-    chatId,
-    userId,
-}) => {
-    const result =
-        await Message.updateMany(
-            {
-                chatId,
+const markMessagesSeen = async ({ chatId, userId }) => {
+    await Message.updateMany(
+        { chatId, senderId: { $ne: userId }, seen: false },
+        { $set: { seen: true } }
+    );
 
-                senderId: {
-                    $ne: userId,
-                },
-
-                seen: false,
-            },
-            {
-                $set: {
-                    seen: true,
-                },
-            }
-        );
-
+    // Reset MY OWN unread counter for this chat to 0
     await Chat.updateOne(
-        {
-            _id: chatId,
-        },
+        { _id: chatId },
         {
             $set: {
                 "lastMessage.seen": true,
+                [`unreadCounts.${userId}`]: 0,
             },
         }
     );
-
-    return result;
 };
 
 const getUserProfile = async (userId) => {
